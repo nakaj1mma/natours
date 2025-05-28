@@ -1,0 +1,50 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.env
+config.env
+.DS_Store
+
+# Logs
+logs/
+*.log
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+
+# Build
+dist/
+build/
+.cache/
+*.tsbuildinfo
+
+# Optional:
+coverage/
+*.tgz
+*.swp
+*.swo
+*.bak
+*.tmp
+*.orig
+
+# Mac
+.DS_Store
+
+# Linux
+*~
+
+# Windows
+*.lnk
