@@ -2,8 +2,16 @@
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 
+// Import shutting down function
+const { shuttingDownServer, setServer } = require("./utils/shutdown");
+
+// Catch unexpected errors not handled by try/catch
+process.on("uncaughtException", (err) => {
+  shuttingDownServer("⛔ Uncaught Exception ⛔", err);
+});
+
 // Configure environment variables
-dotenv.config({ path: "./config.env" });
+dotenv.config({ path: "./.env" });
 
 // Import the Express app
 const app = require("./app");
@@ -17,6 +25,8 @@ const DB = process.env.DATABASE.replace(
   process.env.DATABASE_PASSWORD
 );
 
+let server;
+
 // Function to start the server
 const startServer = async () => {
   try {
@@ -25,8 +35,9 @@ const startServer = async () => {
     console.log("Connected to MongoDB database");
 
     // Start the server
-    app.listen(port, () => {
+    server = app.listen(port, () => {
       console.log(`App running on port ${port}...`);
+      setServer(server);
     });
   } catch (error) {
     console.error("Failed to connect to database:", error);
@@ -36,3 +47,8 @@ const startServer = async () => {
 
 // Start the server
 startServer();
+
+// Catching unhandled rejections
+process.on("unhandledRejection", (err) => {
+  shuttingDownServer("⛔ Unhandled Promise Rejection ⛔", err);
+});

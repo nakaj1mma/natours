@@ -1,7 +1,10 @@
+const mongoose = require("mongoose");
 // Importing the Tour model
 const Tour = require("./../models/tourModel");
-// Importing error handler
-const handleError = require("./../utils/errorHandler");
+// Importing utils
+const APIFeatures = require("./../utils/apiFeatures");
+const catchAsync = require("../utils/catchAsync");
+const AppError = require("../utils/appError");
 
 exports.aliasTopTours = (req, res, next) => {
   req.query.limit = "5";
@@ -10,156 +13,189 @@ exports.aliasTopTours = (req, res, next) => {
   next();
 };
 
-exports.getAllTours = async (req, res) => {
-  try {
-    // Filtering
-    const queryObject = { ...req.query };
-    const excludedFields = ["page", "sort", "limit", "fields"];
-    excludedFields.forEach((el) => delete queryObject[el]);
+exports.getAllTours = catchAsync(async (req, res, next) => {
+  const features = new APIFeatures(Tour.find(), req.query)
+    .filter()
+    .sort()
+    .limitFields()
+    .paginate();
+  const tours = await features.query;
 
-    // Advanced filtering
-    let queryStr = JSON.stringify(queryObject);
-    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+  // Send response
+  res.status(200).json({
+    status: "success",
+    message: "ok",
+    results: tours.length,
+    data: {
+      tours,
+    },
+  });
+});
 
-    // Build query
-    let query = Tour.find(JSON.parse(queryStr));
+exports.getTour = catchAsync(async (req, res, next) => {
+  // if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+  //   return next(new AppError("Invalid tour ID format", 400));
+  // }
 
-    // -------- Sorting --------
-    if (req.query.sort) {
-      const sortBy = req.query.sort.split(",").join(" ");
-      query = query.sort(sortBy);
-    }
-    // ------------------------
+  const tour = await Tour.findById(req.params.id);
 
-    // -------- Field limiting --------
-    if (req.query.fields) {
-      const fields = req.query.fields.split(",").join(" ");
-      query = query.select(fields);
-    } else {
-      query = query.select("-__v");
-    }
-    // --------------------------------
+  if (!tour) {
+    return next(new AppError("No tour found with that ID", 404));
+  }
 
-    // -------- Pagination --------
-    const page = req.query.page ? +req.query.page : 1;
-    const limit = req.query.limit ? +req.query.limit : 100;
+  res.status(200).json({
+    status: "success",
+    message: "ok",
+    data: {
+      tour,
+    },
+  });
+});
 
-    if (isNaN(page) || page <= 0) {
-      return res.status(400).json({
-        status: "fail",
-        message: "Invalid 'page' parameter. It must be a positive number.",
-      });
-    }
+exports.createTour = catchAsync(async (req, res, next) => {
+  const newTour = await Tour.create(req.body);
 
-    if (isNaN(limit) || limit <= 0) {
-      return res.status(400).json({
-        status: "fail",
-        message: "Invalid 'limit' parameter. It must be a positive number.",
-      });
-    }
+  res.status(201).json({
+    status: "success",
+    message: "Tour created successfully",
+    data: { tour: newTour },
+  });
+});
 
-    const skip = (page - 1) * limit;
+exports.updateTour = catchAsync(async (req, res, next) => {
+  const tour = await Tour.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  });
 
-    const total = await Tour.countDocuments(JSON.parse(queryStr));
-    if (skip >= total) {
-      return res.status(404).json({
-        status: "fail",
-        message: "Page number is too high, no results available.",
-      });
-    }
+  if (!tour) {
+    return next(new AppError("No tour found with that ID", 404));
+  }
 
-    query = query.skip(skip).limit(limit);
-    // --------------------------------
+  res.status(200).json({
+    status: "success",
+    message: "ok",
+    data: {
+      tour,
+    },
+  });
+});
 
-    // Execute query
-    const tours = await query;
+exports.deleteTour = catchAsync(async (req, res, next) => {
+  const tour = await Tour.findByIdAndDelete(req.params.id);
 
-    // Send response
-    res.status(200).json({
-      status: "success",
-      message: "ok",
-      results: tours.length,
-      data: {
-        tours,
+  if (!tour) {
+    return next(new AppError("No tour found with that ID", 404));
+  }
+  res.status(204).json({
+    status: "success",
+    message: "Tour deleted successfully",
+  });
+});
+
+exports.getTourStats = catchAsync(async (req, res, next) => {
+  const stats = await Tour.aggregate([
+    {
+      $match: { ratingsAverage: { $gte: 4.5 } },
+    },
+    {
+      $group: {
+        _id: { $toUpper: "$difficulty" },
+        numTours: { $sum: 1 },
+        numRatings: { $sum: "$ratingsQuantity" },
+        avgRating: { $avg: "$ratingsAverage" },
+        avgPrice: { $avg: "$price" },
+        minPrice: { $min: "$price" },
+        maxPrice: { $max: "$price" },
       },
-    });
-  } catch (error) {
-    handleError(res, error);
-  }
-};
+    },
+    {
+      $sort: {
+        avgPrice: 1,
+      },
+    },
+    // {
+    //   $match: { _id: { $ne: "EASY" } },
+    // },
+  ]);
 
-exports.getTour = async (req, res) => {
-  try {
-    const tour = await Tour.findById(req.params.id);
+  res.status(200).json({
+    status: "success",
+    message: "ok",
+    data: {
+      stats,
+    },
+  });
+});
 
-    tour
-      ? res.status(200).json({
-          status: "success",
-          message: "ok",
-          data: {
-            tour,
-          },
-        })
-      : res.status(404).json({
-          status: "fail",
-          message: "Can not find tour",
-        });
-  } catch (error) {
-    handleError(res, error);
-  }
-};
+exports.getMonthlyPlan = catchAsync(async (req, res, next) => {
+  const year = parseInt(req.params.year);
 
-exports.createTour = async (req, res) => {
-  try {
-    const newTour = await Tour.create(req.body);
-    res.status(201).json({
-      status: "success",
-      message: "Tour created successfully",
-      data: { tour: newTour },
-    });
-  } catch (error) {
-    handleError(res, error);
-  }
-};
+  const months = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
-exports.updateTour = async (req, res) => {
-  try {
-    const tour = await Tour.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
+  const plan = await Tour.aggregate([
+    {
+      $unwind: "$startDates",
+    },
+    {
+      $match: {
+        startDates: {
+          $gte: new Date(`${year}-01-01`),
+          $lte: new Date(`${year}-12-31`),
+        },
+      },
+    },
+    {
+      $group: {
+        _id: { $month: "$startDates" },
+        numTourStarts: { $sum: 1 },
+        tours: {
+          $push: "$name",
+        },
+      },
+    },
+    {
+      $addFields: { month: "$_id" },
+    },
+    {
+      $sort: {
+        numTourStarts: -1,
+      },
+    },
+    // {
+    //   $project: {
+    //     _id: 0,
+    //   },
+    // },
+    // {
+    //   $limit: 12,
+    // },
+  ]);
 
-    tour
-      ? res.status(200).json({
-          status: "success",
-          message: "ok",
-          data: {
-            tour,
-          },
-        })
-      : res.status(404).json({
-          status: "fail",
-          message: "Can not find tour",
-        });
-  } catch (error) {
-    handleError(res, error);
-  }
-};
+  const formattedPlan = plan.map((item) => ({
+    month: months[item._id - 1],
+    numTourStarts: item.numTourStarts,
+    tours: item.tours,
+  }));
 
-exports.deleteTour = async (req, res) => {
-  try {
-    const tour = await Tour.findByIdAndDelete(req.params.id);
-
-    tour
-      ? res.status(204).json({
-          status: "success",
-          message: "Tour deleted successfully",
-        })
-      : res.status(404).json({
-          status: "fail",
-          message: "Can not find a tour",
-        });
-  } catch (error) {
-    handleError(res, error);
-  }
-};
+  res.status(200).json({
+    status: "success",
+    message: "ok",
+    data: {
+      plan: formattedPlan,
+    },
+  });
+});
