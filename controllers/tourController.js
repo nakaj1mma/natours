@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+// const mongoose = require("mongoose");
 // Importing the Tour model
 const Tour = require("./../models/tourModel");
 // Importing utils
