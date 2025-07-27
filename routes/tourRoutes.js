@@ -14,6 +14,8 @@ const {
   // checkID,
 } = require("./../controllers/tourController");
 
+const { protect } = require("../controllers/authController");
+
 // Create an Express router for tours
 const router = express.Router();
 
@@ -26,7 +28,7 @@ router.route("/tour-stats").get(getTourStats);
 router.route("/mounthly-plan/:year").get(getMonthlyPlan);
 
 // Define the main routes
-router.route("/").get(getAllTours).post(createTour);
+router.route("/").get(protect, getAllTours).post(createTour);
 router.route("/:id").get(getTour).patch(updateTour).delete(deleteTour);
 
 // Export the router

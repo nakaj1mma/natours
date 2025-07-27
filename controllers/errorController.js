@@ -5,17 +5,25 @@ const handleCastErrorDB = (error) => {
   const message = `Invalid ${error.path}: ${error.value}.`;
   return new AppError(message, 400);
 };
-const handleDublicateFieldsDB = (error) => {
-  const value = error.errmsg.match(/(["'])(.*?)\1/);
-  const message = `Dublicate fields value: ${value[0]}. Please use another value!`;
+const handleDuplicateFieldsDB = (err) => {
+  const value = err.errmsg.match(/(["'])(\\?.)*?\1/)[0];
+  const message = `Duplicate field value: ${value}. Please use another value!`;
   return new AppError(message, 400);
 };
+
 const handleValidationErrorDB = (error) => {
   const errors = Object.values(error.errors).map((el) => el.message);
   const message = `Invalid input data. ${errors.join(". ")}`;
   return new AppError(message, 400);
 };
+
 //
+
+// Handle JWT errors
+const handleJWTError = () =>
+  new AppError("Invalid token. Please log in again!", 401);
+const handleJWTExpiredError = () =>
+  new AppError("Your token has been expired! Please log in again.", 401);
 
 // Sending errors
 const sendErrorDev = (error, res) => {
@@ -28,6 +36,7 @@ const sendErrorDev = (error, res) => {
 };
 const sendErrorProd = (error, res) => {
   // Operational, trusted error: send message to client
+
   if (error.isOperational) {
     res.status(error.statusCode).json({
       status: error.status,
@@ -57,11 +66,17 @@ module.exports = (error, req, res, next) => {
   if (process.env.NODE_ENV === "development") {
     sendErrorDev(error, res);
   } else if (process.env.NODE_ENV === "production") {
-    let err = Object.create(error);
+    let err = error;
+
+    // DB errors
 
     if (err.name === "CastError") err = handleCastErrorDB(err);
     if (err.name === "ValidationError") err = handleValidationErrorDB(err);
-    if (err.code === 11000) err = handleDublicateFieldsDB(err);
+    if (err.code === 11000) err = handleDuplicateFieldsDB(err);
+
+    // JWT errors
+    if (err.name === "JsonWebTokenError") err = handleJWTError();
+    if (err.name === "TokenExpiredError") err = handleJWTExpiredError();
 
     sendErrorProd(err, res);
   }

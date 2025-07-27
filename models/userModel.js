@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const validator = require("validator");
 const bcrypt = require("bcryptjs");
-const catchAsync = require("../utils/catchAsync");
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -21,7 +20,7 @@ const userSchema = new mongoose.Schema({
     required: [true, "Please enter your email."],
     trim: true,
     lowercase: true,
-    unique: [true, "This email is already used."],
+    unique: true,
     validate: {
       validator: validator.isEmail,
       message: "Email is not valid. Please double-check.",
@@ -53,6 +52,7 @@ const userSchema = new mongoose.Schema({
   photo: {
     type: String,
   },
+  passwordChangedAt: { type: Date },
 });
 
 userSchema.pre("save", async function (next) {
@@ -72,6 +72,20 @@ userSchema.methods.correctPassword = async function (
   userPassword
 ) {
   return bcrypt.compare(candidatePassword, userPassword);
+};
+
+userSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
+  if (this.passwordChangedAt) {
+    const changedTimestamp = parseInt(
+      this.passwordChangedAt.getTime() / 1000,
+      10
+    );
+
+    return JWTTimestamp < changedTimestamp;
+  }
+
+  // False means NOT changed
+  return false;
 };
 
 const User = mongoose.model("User", userSchema);
