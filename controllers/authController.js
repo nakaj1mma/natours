@@ -15,6 +15,19 @@ const signToken = (id) => {
   });
 };
 
+const createAndSendToken = (user, statusCode, res) => {
+  const token = signToken(user._id);
+
+  res.status(statusCode).json({
+    status: "success",
+    message: "ok",
+    token,
+    data: {
+      user,
+    },
+  });
+};
+
 exports.signup = catchAsync(async (req, res, next) => {
   const newUser = await User.create({
     name: req.body.name,
@@ -23,16 +36,7 @@ exports.signup = catchAsync(async (req, res, next) => {
     passwordConfirm: req.body.passwordConfirm,
   });
 
-  const token = signToken(newUser._id);
-
-  res.status(201).json({
-    status: "success",
-    message: "ok",
-    token,
-    data: {
-      user: newUser,
-    },
-  });
+  createAndSendToken(newUser, 201, res);
 });
 
 exports.login = catchAsync(async (req, res, next) => {
@@ -51,13 +55,7 @@ exports.login = catchAsync(async (req, res, next) => {
   }
 
   // 3) If everything ok, send token to client
-  const token = signToken(user._id);
-
-  res.status(200).json({
-    status: "success",
-    message: "ok",
-    token,
-  });
+  createAndSendToken(user, 200, res);
 });
 
 exports.protect = catchAsync(async (req, res, next) => {
@@ -174,13 +172,32 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   // 3) Update changedPassowordAt property for the user
 
   // 4) Log the user in, send JWT
-  const token = signToken(user._id);
+  createAndSendToken(user, 200, res);
+});
 
-  res.status(201).json({
-    status: "success",
-    message: "ok",
-    token,
-  });
+exports.updatePassword = catchAsync(async (req, res, next) => {
+  const { passwordCurrent, password, passwordConfirm } = req.body;
+
+  if (!passwordCurrent)
+    return next(new AppError("Please provide a current password.", 400));
+
+  // 1) Get user from collection
+  const user = await User.findById(req.user._id).select("+password");
+
+  //  2) Check if the POSTed password is correct
+
+  if (!(await user.correctPassword(passwordCurrent, user.password))) {
+    return next(new AppError("Incorrect password", 401));
+  }
+
+  //  3) If so, update password
+  user.password = password;
+  user.passwordConfirm = passwordConfirm;
+  await user.save();
+  // User.findByIdAndUpdate will not work intended!
+
+  // 4) Log user in, send JWT
+  createAndSendToken(user, 200, res);
 });
 
 exports.restrictTo = (...roles) => {
