@@ -1,6 +1,9 @@
 // Require the Express module
 const express = require("express");
 
+// Require review router
+const reviewRouter = require("../routes/reviewRoutes");
+
 // Import controller functions for the tour routes
 const {
   getAllTours,
@@ -22,9 +25,14 @@ const router = express.Router();
 // Example of middleware that runs only when the route contains the "id" parameter
 // router.param("id", checkID);
 
-router.route("/top-5-cheap").get(protect, aliasTopTours, getAllTours);
+// GET /tour/5c88fa8cf4afda39709c296c/reviews
+// GET /tour/5c88fa8cf4afda39709c296c/reviews/689597edfb79e8c7f196fc9f
 
-router.route("/tour-stats").get(protect, getTourStats);
+router.use("/:tourId/reviews", reviewRouter);
+
+router.route("/top-5-cheap").get(aliasTopTours, getAllTours);
+
+router.route("/tour-stats").get(getTourStats);
 router
   .route("/mounthly-plan/:year")
   .get(protect, restrictTo("admin", "guide", "lead-guide"), getMonthlyPlan);
@@ -32,11 +40,11 @@ router
 // Define the main routes
 router
   .route("/")
-  .get(protect, getAllTours)
+  .get(getAllTours)
   .post(protect, restrictTo("admin", "lead-guide"), createTour);
 router
   .route("/:id")
-  .get(protect, getTour)
+  .get(getTour)
   .patch(protect, restrictTo("admin", "lead-guide"), updateTour)
   .delete(protect, restrictTo("admin", "lead-guide"), deleteTour);
 
